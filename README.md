@@ -21,31 +21,68 @@ OPENAI_API_KEY=sk-proj-...
 
 **Service:** `app/services/unified_ads_service.rb`
 
+Unified.to abstracts the Meta Ads API - we don't talk to Facebook directly, we talk to Unified which handles the complexity.
+
 ### OAuth Flow
 
 | Step | Route | What Happens |
 |------|-------|--------------|
-| 1 | `GET /dashboard/settings/unified/connect` | Generates Unified OAuth URL, redirects user |
-| 2 | (Unified.to) | User logs into Meta, authorizes app |
-| 3 | `GET /dashboard/settings/unified/callback` | Verifies signature, stores `connection_id` in session |
-| 4 | `GET /dashboard/settings/unified/select_org` | Fetches ad accounts, shows picker UI |
-| 5 | `POST /dashboard/settings/unified/save_org` | Saves ad account, triggers analysis job |
+| 1 | `GET /dashboard/settings/unified/connect` | Generates Unified OAuth URL, redirects user to Meta login |
+| 2 | (Unified.to → Meta) | User logs into Facebook, sees permissions, clicks "Allow" |
+| 3 | `GET /dashboard/settings/unified/callback` | Unified redirects back with `connection_id`, we verify signature |
+| 4 | `GET /dashboard/settings/unified/select_org` | Fetches all ad accounts user has access to, shows picker |
+| 5 | `POST /dashboard/settings/unified/save_org` | Saves selected ad account, triggers background analysis |
+
+### What Gets Stored
+
+- `connection_id` - Unified's OAuth token reference (used for all API calls)
+- `organization_id` - The specific Meta ad account ID the user selected
+
+One Meta user can have access to multiple ad accounts (personal, business, client accounts). We let them pick which one to analyze.
 
 ### Data Fetching
 
 **Main method:** `UnifiedAdsService.fetch_all_data(connection_id:, org_id:, days:)`
 
-Calls 4 Unified endpoints:
-- `GET /ads/{connection_id}/campaign?org_id=...`
-- `GET /ads/{connection_id}/group?org_id=...` (ad sets)
-- `GET /ads/{connection_id}/ad?org_id=...`
-- `GET /ads/{connection_id}/report?org_id=...&start_gte=...&end_lt=...`
+Pulls from 4 Unified endpoints:
 
-**Pagination:** 100 items/page, continues until < 100 returned, 50 page safety cap.
+| Endpoint | What It Returns |
+|----------|-----------------|
+| `/ads/{connection_id}/campaign` | All campaigns (name, status, objective, budget) |
+| `/ads/{connection_id}/group` | All ad sets (targeting, daily budget, schedule) |
+| `/ads/{connection_id}/ad` | All ads (creative type, status, preview) |
+| `/ads/{connection_id}/report` | Performance metrics by date (spend, impressions, clicks, conversions) |
 
-**Rate Limiting:** On 429, retries with exponential backoff (2s → 4s, max 10s).
+All requests include `org_id` to scope to the selected ad account.
 
-**Auth Errors:** On 401/403, sets `needs_reconnect: true` to prompt reconnection.
+### What the User Gets
+
+From the raw Unified data, we calculate and display:
+
+**Metrics:**
+- Total spend, impressions, clicks, conversions, revenue
+- CTR (click-through rate), CPC (cost per click), ROAS (return on ad spend)
+- Daily averages for each metric
+
+**Campaign Data:**
+- Campaign name, status (Active/Paused), objective
+- Per-campaign spend, impressions, clicks, conversions, ROAS
+- Expandable to see ad sets and individual ads
+
+**Daily Breakdown:**
+- Day-by-day performance for charts
+- Trend indicators (up/down arrows)
+- Best performing day highlighted
+
+### Error Handling
+
+**Pagination:** 100 items/page, continues until < 100 returned. Safety cap at 50 pages to prevent infinite loops on huge accounts.
+
+**Rate Limiting:** On 429 response, waits for `Retry-After` header (or 2s default), retries up to 2 times with exponential backoff (2s → 4s, max 10s).
+
+**Auth Errors:** On 401/403, sets `needs_reconnect: true`. The UI shows "Please reconnect your account" and marks the account inactive.
+
+**Partial Data:** If one endpoint fails but others succeed, we return what we got with `data_incomplete: true` flag.
 
 ### Return Structure
 
@@ -55,14 +92,21 @@ Calls 4 Unified endpoints:
   needs_reconnect: false,
   data_incomplete: false,
   data: {
-    campaigns: [...],
-    ad_groups: [...],
-    ads: [...],
-    metrics: { total_spend, total_impressions, total_clicks, total_conversions, 
-               total_revenue, average_ctr, average_cpc, average_roas },
-    daily_breakdown: [...]
+    campaigns: [...],      # Normalized campaign objects
+    ad_groups: [...],      # Normalized ad set objects
+    ads: [...],            # Normalized ad objects
+    metrics: {             # Aggregated from reports
+      total_spend, total_impressions, total_clicks, 
+      total_conversions, total_revenue,
+      average_ctr, average_cpc, average_roas
+    },
+    daily_breakdown: [...]  # For charts
   },
-  metadata: { connection_id, org_id, days, pulled_at, counts, truncated_endpoints }
+  metadata: {
+    connection_id, org_id, days, pulled_at,
+    counts: { campaigns: 5, groups: 12, ads: 30, reports: 30 },
+    truncated_endpoints: []  # Which endpoints hit page cap
+  }
 }
 ```
 
