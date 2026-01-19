@@ -80,6 +80,29 @@ Compact payload to minimize cost:
 - Top 5 campaigns by spend
 - Metadata (date range, counts)
 
+### What GPT Analyzes
+
+GPT receives the data and evaluates:
+
+1. **Overall Performance** - Is ROAS good? How does spend efficiency look?
+2. **Trends** - Are metrics improving, declining, or stable over the 14-day window?
+3. **Campaign Comparison** - Which campaigns are performing best/worst?
+4. **Anomalies** - Any sudden drops in CTR, spikes in CPC, or unusual patterns?
+
+### What the User Gets
+
+**Summary:** A 2-3 sentence overview like:
+> "Your campaigns generated $3,500 revenue from $1,234 spend (2.84x ROAS) over the last 30 days. The Summer Sale campaign is your top performer, but CTR has declined 15% this week."
+
+**Insights:** AI-identified observations with evidence:
+- "Strong ROAS Performance" (success) - "Your 2.84x ROAS exceeds industry average of 2.0x"
+- "Declining CTR Trend" (warning) - "CTR dropped from 3.5% to 2.9% over the past week"
+- "Mobile Underperforming" (critical) - "Mobile ROAS is 1.2x vs 3.1x on desktop"
+
+**Actions:** Prioritized recommendations with steps:
+- "Refresh Ad Creatives" (high) - Steps: Create new variations, A/B test, pause underperformers
+- "Scale Top Campaign" (medium) - Steps: Increase budget 20%, monitor 3 days, scale if ROAS holds
+
 ### Response Schema (enforced by OpenAI)
 
 ```json
@@ -89,32 +112,32 @@ Compact payload to minimize cost:
   "insights": [{
     "type": "success|warning|critical",
     "title": "Insight title",
-    "detail": "Explanation",
-    "evidence": "Data backing this up"
+    "detail": "Explanation of what GPT found",
+    "evidence": "Specific data backing this up"
   }],
   "actions": [{
     "priority": "high|medium|low",
     "title": "Action title",
-    "steps": ["Step 1", "Step 2"],
-    "expected_impact": "Expected result"
+    "steps": ["Step 1", "Step 2", "Step 3"],
+    "expected_impact": "What user can expect if they do this"
   }]
 }
 ```
 
 ### Insight Types
-- `success` - Positive performance
-- `warning` - Needs attention
-- `critical` - Urgent issue
+- `success` - Positive performance worth celebrating
+- `warning` - Needs attention but not urgent
+- `critical` - Urgent issue hurting performance
 
 ### Action Priorities
-- `high` - Do first
-- `medium` - Can wait
-- `low` - Nice to have
+- `high` - Do this first, biggest impact on results
+- `medium` - Important but can wait a few days
+- `low` - Nice optimization, do when you have time
 
 ### Config
-- Model: `gpt-4o-mini`
-- Temperature: `0.3`
-- Strict JSON schema enforced
+- Model: `gpt-4o-mini` (fast, cheap, supports structured outputs)
+- Temperature: `0.3` (consistent, factual - not creative)
+- Strict JSON schema enforced (GPT must return valid structure)
 
 ---
 
