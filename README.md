@@ -55,15 +55,35 @@ Create 3 products with monthly and yearly pricing:
 
 ---
 
-## Step 4: Setup Meta Business Account
+## Step 4: Create Meta App
 
-Before using Unified.to, you need a Meta Business account with ad accounts:
+Before using Unified.to, you need to create a Meta app:
 
-1. Go to https://business.facebook.com
-2. Create a Business account if you don't have one
-3. Go to **Business Settings** → **Ad Accounts**
-4. Make sure you have at least one ad account set up
-5. Note: You need to be an Admin or Advertiser on the ad account to connect it
+**Create the App:**
+1. Go to https://developers.facebook.com/apps
+2. Click "Create App"
+3. Name: Enter any name you want
+4. Contact Email: Enter your email
+5. Click "Ads and Monetisation"
+6. Select "Measure ad performance data with Marketing API"
+7. Business Portfolio: Click "I don't want to connect a business portfolio yet"
+8. Requirements: Not needed
+9. Click "Create App"
+
+**Configure Facebook Login for Business:**
+1. In your app sidebar, go to **Facebook Login for Business** → **Settings**
+2. Enable the following:
+   - ✅ Client OAuth Login
+   - ✅ Web OAuth Login
+   - ✅ Enforce HTTPS
+   - ✅ Use Strict Mode for Redirect URIs
+3. In **Valid OAuth Redirect URIs**, add: `https://api.unified.to/oauth/code`
+4. Click "Save Changes"
+
+**Configure App Domains:**
+1. Go to **App Settings** → **Basic**
+2. In **App Domains**, add: `unified.to`
+3. Click "Save Changes"
 
 ---
 
