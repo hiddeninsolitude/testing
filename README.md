@@ -89,13 +89,11 @@ Before using Unified.to, you need to create a Meta app:
 
 ## Step 5: Get Unified.to API Keys
 
-1. Sign up at https://unified.to
-2. Create a new workspace
+1. In Unified.to dashboard, go to **Configurations** → **API Keys**
+2. Click "Create API Key"
 3. Copy the **Workspace ID** → Save as `UNIFIED_WORKSPACE_ID`
-4. Go to Settings → API Keys
-5. Click "Create API Key"
-6. Copy the token → Save as `UNIFIED_API_TOKEN`
-7. Set environment to Production → Save as `UNIFIED_ENV=Production`
+4. Copy the **API Token** → Save as `UNIFIED_API_TOKEN`
+5. Set environment to Production → Save as `UNIFIED_ENV=Production`
 
 ---
 
