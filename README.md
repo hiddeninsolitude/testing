@@ -102,11 +102,23 @@ Before using Unified.to, you need to create a Meta app:
 ## Step 6: Enable Meta Ads in Unified.to
 
 1. In Unified.to dashboard, go to **Integrations**
-2. Find **Meta for Business** (or Facebook Ads)
-3. Click **Enable** or **Configure**
-4. Follow the prompts to connect your Meta Business account
-5. Grant the necessary permissions when prompted
-6. This allows Unified.to to access your Meta ad accounts
+2. Search for **Meta Ads**
+3. For **Integration categories**, select:
+   - ✅ Advertising
+   - ✅ Passthrough
+4. Configure OAuth credentials:
+   - **OAuth 2 Client ID**: 
+     - Go back to your Meta app → **App Settings** → **Basic**
+     - Copy the **App ID**
+     - Paste it into the OAuth 2 Client ID box in Unified.to
+   - **OAuth 2 Client Secret**:
+     - In the same Meta app page, copy the **App Secret**
+     - Paste it into the OAuth 2 Client Secret box in Unified.to
+5. Configure scopes:
+   - Expand **Override OAuth 2 Scopes**
+   - Find and enable `ads_report_read`
+   - In **Override Meta Ads Scopes**, type: `ads_read`
+6. Click **Save** or **Update**
 
 ---
 
