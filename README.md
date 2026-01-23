@@ -1,267 +1,313 @@
-# Adsetric - Configuration & Integration Guide
+# Adsetric - Deployment Guide
 
-## Environment Variables
+Simple guide to get Adsetric running in production.
+
+---
+
+## Step 1: Get Stripe API Keys
+
+1. Go to https://dashboard.stripe.com/apikeys
+2. Copy **Secret key** (starts with `sk_`) → Save as `STRIPE_SECRET_KEY`
+3. Copy **Publishable key** (starts with `pk_`) → Save as `STRIPE_PUBLISHABLE_KEY`
+
+---
+
+## Step 2: Create Stripe Products & Prices
+
+Go to https://dashboard.stripe.com/products
+
+Create 3 products with monthly and yearly pricing:
+
+**Product 1: Starter**
+- Click "Add product"
+- Name: `Starter`
+- Add price: $17.00, Recurring, Monthly → Copy the price ID (starts with `price_`)
+- Add another price: $170.00, Recurring, Yearly → Copy the price ID
+- Save these as `STRIPE_PRICE_STARTER_MONTHLY` and `STRIPE_PRICE_STARTER_YEARLY`
+
+**Product 2: Pro**
+- Name: `Pro`
+- Monthly: $29.00 → Save as `STRIPE_PRICE_PRO_MONTHLY`
+- Yearly: $290.00 → Save as `STRIPE_PRICE_PRO_YEARLY`
+
+**Product 3: Agency**
+- Name: `Agency`
+- Monthly: $97.00 → Save as `STRIPE_PRICE_AGENCY_MONTHLY`
+- Yearly: $970.00 → Save as `STRIPE_PRICE_AGENCY_YEARLY`
+
+---
+
+## Step 3: Setup Stripe Webhook
+
+1. Go to https://dashboard.stripe.com/webhooks
+2. Click "Add endpoint"
+3. Enter your webhook URL: `https://yourdomain.com/webhooks/stripe`
+4. Click "Select events" and add:
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.paid`
+   - `invoice.payment_failed`
+5. Click "Add endpoint"
+6. Click "Reveal" under Signing secret
+7. Copy the secret (starts with `whsec_`) → Save as `STRIPE_WEBHOOK_SECRET`
+
+---
+
+## Step 4: Setup Meta Business Account
+
+Before using Unified.to, you need a Meta Business account with ad accounts:
+
+1. Go to https://business.facebook.com
+2. Create a Business account if you don't have one
+3. Go to **Business Settings** → **Ad Accounts**
+4. Make sure you have at least one ad account set up
+5. Note: You need to be an Admin or Advertiser on the ad account to connect it
+
+---
+
+## Step 5: Get Unified.to API Keys
+
+1. Sign up at https://unified.to
+2. Create a new workspace
+3. Copy the **Workspace ID** → Save as `UNIFIED_WORKSPACE_ID`
+4. Go to Settings → API Keys
+5. Click "Create API Key"
+6. Copy the token → Save as `UNIFIED_API_TOKEN`
+7. Set environment to Production → Save as `UNIFIED_ENV=Production`
+
+---
+
+## Step 6: Enable Meta Ads in Unified.to
+
+1. In Unified.to dashboard, go to **Integrations**
+2. Find **Meta for Business** (or Facebook Ads)
+3. Click **Enable** or **Configure**
+4. Follow the prompts to connect your Meta Business account
+5. Grant the necessary permissions when prompted
+6. This allows Unified.to to access your Meta ad accounts
+
+---
+
+## Step 7: Configure Unified.to OAuth Callback
+
+1. In Unified.to dashboard, go to Settings → OAuth (or Developers)
+2. Add your callback URL: `https://yourdomain.com/connect/callback`
+3. Save the configuration
+
+---
+
+## Step 8: Get OpenAI API Key
+
+1. Go to https://platform.openai.com/api-keys
+2. Click "Create new secret key"
+3. Copy the key (starts with `sk-proj-`) → Save as `OPENAI_API_KEY`
+4. Make sure you have billing set up at https://platform.openai.com/account/billing
+
+---
+
+## Step 9: Create Environment File
+
+Create a `.env` file in your project root with all the keys:
 
 ```bash
-# .env
+# Stripe Keys
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
 
-# Unified.to - Meta Ads API (https://app.unified.to/settings/api)
-UNIFIED_WORKSPACE_ID=your_workspace_id
-UNIFIED_API_TOKEN=your_jwt_token
-UNIFIED_WORKSPACE_SECRET=optional_signature_verification
-UNIFIED_ENV=Production  # or Sandbox for testing
+# Stripe Price IDs
+STRIPE_PRICE_STARTER_MONTHLY=price_...
+STRIPE_PRICE_STARTER_YEARLY=price_...
+STRIPE_PRICE_PRO_MONTHLY=price_...
+STRIPE_PRICE_PRO_YEARLY=price_...
+STRIPE_PRICE_AGENCY_MONTHLY=price_...
+STRIPE_PRICE_AGENCY_YEARLY=price_...
 
-# OpenAI (https://platform.openai.com/api-keys)
+# Unified.to (Meta Ads)
+UNIFIED_WORKSPACE_ID=...
+UNIFIED_API_TOKEN=...
+UNIFIED_ENV=Production
+
+# OpenAI
 OPENAI_API_KEY=sk-proj-...
+
+# Rails
+RAILS_ENV=production
+SECRET_KEY_BASE=<generate by running: rails secret>
 ```
 
 ---
 
-## Unified.to API Integration
+## Step 10: Deploy on VPS (Ubuntu)
 
-**Service:** `app/services/unified_ads_service.rb`
+**1. Install dependencies:**
+```bash
+sudo apt update
+sudo apt install -y ruby-full build-essential postgresql postgresql-contrib libpq-dev nodejs nginx
+```
 
-Unified.to abstracts the Meta Ads API - we don't talk to Facebook directly, we talk to Unified which handles the complexity.
+**2. Clone and setup application:**
+```bash
+cd /var/www
+git clone <your-repo-url> adsetric
+cd adsetric
+bundle install
+```
 
-### OAuth Flow
+**3. Setup database:**
+```bash
+sudo -u postgres createdb adsetric_production
+RAILS_ENV=production rails db:migrate
+```
 
-| Step | Route | What Happens |
-|------|-------|--------------|
-| 1 | `GET /dashboard/settings/unified/connect` | Generates Unified OAuth URL, redirects user to Meta login |
-| 2 | (Unified.to → Meta) | User logs into Facebook, sees permissions, clicks "Allow" |
-| 3 | `GET /dashboard/settings/unified/callback` | Unified redirects back with `connection_id`, we verify signature |
-| 4 | `GET /dashboard/settings/unified/select_org` | Fetches all ad accounts user has access to, shows picker |
-| 5 | `POST /dashboard/settings/unified/save_org` | Saves selected ad account, triggers background analysis |
+**4. Precompile assets:**
+```bash
+RAILS_ENV=production rails assets:precompile
+```
 
-### What Gets Stored
+**5. Create systemd service** (`/etc/systemd/system/adsetric.service`):
+```ini
+[Unit]
+Description=Adsetric
+After=network.target
 
-- `connection_id` - Unified's OAuth token reference (used for all API calls)
-- `organization_id` - The specific Meta ad account ID the user selected
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/adsetric
+Environment=RAILS_ENV=production
+EnvironmentFile=/var/www/adsetric/.env
+ExecStart=/usr/local/bin/bundle exec puma -C config/puma.rb
+Restart=always
 
-One Meta user can have access to multiple ad accounts (personal, business, client accounts). We let them pick which one to analyze.
+[Install]
+WantedBy=multi-user.target
+```
 
-### Data Fetching
+**6. Start service:**
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable adsetric
+sudo systemctl start adsetric
+```
 
-**Main method:** `UnifiedAdsService.fetch_all_data(connection_id:, org_id:, days:)`
+---
 
-Pulls from 4 Unified endpoints:
+## Step 11: Setup Nginx & SSL
 
-| Endpoint | What It Returns |
-|----------|-----------------|
-| `/ads/{connection_id}/campaign` | All campaigns (name, status, objective, budget) |
-| `/ads/{connection_id}/group` | All ad sets (targeting, daily budget, schedule) |
-| `/ads/{connection_id}/ad` | All ads (creative type, status, preview) |
-| `/ads/{connection_id}/report` | Performance metrics by date (spend, impressions, clicks, conversions) |
-
-All requests include `org_id` to scope to the selected ad account.
-
-### What the User Gets
-
-From the raw Unified data, we calculate and display:
-
-**Metrics:**
-- Total spend, impressions, clicks, conversions, revenue
-- CTR (click-through rate), CPC (cost per click), ROAS (return on ad spend)
-- Daily averages for each metric
-
-**Campaign Data:**
-- Campaign name, status (Active/Paused), objective
-- Per-campaign spend, impressions, clicks, conversions, ROAS
-- Expandable to see ad sets and individual ads
-
-**Daily Breakdown:**
-- Day-by-day performance for charts
-- Trend indicators (up/down arrows)
-- Best performing day highlighted
-
-### Error Handling
-
-**Pagination:** 100 items/page, continues until < 100 returned. Safety cap at 50 pages to prevent infinite loops on huge accounts.
-
-**Rate Limiting:** On 429 response, waits for `Retry-After` header (or 2s default), retries up to 2 times with exponential backoff (2s → 4s, max 10s).
-
-**Auth Errors:** On 401/403, sets `needs_reconnect: true`. The UI shows "Please reconnect your account" and marks the account inactive.
-
-**Partial Data:** If one endpoint fails but others succeed, we return what we got with `data_incomplete: true` flag.
-
-### Return Structure
-
-```ruby
-{
-  success: true,
-  needs_reconnect: false,
-  data_incomplete: false,
-  data: {
-    campaigns: [...],      # Normalized campaign objects
-    ad_groups: [...],      # Normalized ad set objects
-    ads: [...],            # Normalized ad objects
-    metrics: {             # Aggregated from reports
-      total_spend, total_impressions, total_clicks, 
-      total_conversions, total_revenue,
-      average_ctr, average_cpc, average_roas
-    },
-    daily_breakdown: [...]  # For charts
-  },
-  metadata: {
-    connection_id, org_id, days, pulled_at,
-    counts: { campaigns: 5, groups: 12, ads: 30, reports: 30 },
-    truncated_endpoints: []  # Which endpoints hit page cap
+**1. Create Nginx config** (`/etc/nginx/sites-available/adsetric`):
+```nginx
+server {
+  listen 80;
+  server_name yourdomain.com;
+  
+  location / {
+    proxy_pass http://localhost:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
   }
 }
 ```
 
----
-
-## ChatGPT Analysis
-
-**Service:** `app/services/chatgpt_analysis_service.rb`
-
-### What Gets Sent to GPT
-
-Compact payload to minimize cost:
-- Aggregated metrics (spend, impressions, clicks, CTR, conversions, ROAS)
-- Last 14 days daily breakdown (for trend analysis)
-- Top 5 campaigns by spend
-- Metadata (date range, counts)
-
-### What GPT Analyzes
-
-GPT receives the data and evaluates:
-
-1. **Overall Performance** - Is ROAS good? How does spend efficiency look?
-2. **Trends** - Are metrics improving, declining, or stable over the 14-day window?
-3. **Campaign Comparison** - Which campaigns are performing best/worst?
-4. **Anomalies** - Any sudden drops in CTR, spikes in CPC, or unusual patterns?
-
-### What the User Gets
-
-**Summary:** A 2-3 sentence overview like:
-> "Your campaigns generated $3,500 revenue from $1,234 spend (2.84x ROAS) over the last 30 days. The Summer Sale campaign is your top performer, but CTR has declined 15% this week."
-
-**Insights:** AI-identified observations with evidence:
-- "Strong ROAS Performance" (success) - "Your 2.84x ROAS exceeds industry average of 2.0x"
-- "Declining CTR Trend" (warning) - "CTR dropped from 3.5% to 2.9% over the past week"
-- "Mobile Underperforming" (critical) - "Mobile ROAS is 1.2x vs 3.1x on desktop"
-
-**Actions:** Prioritized recommendations with steps:
-- "Refresh Ad Creatives" (high) - Steps: Create new variations, A/B test, pause underperformers
-- "Scale Top Campaign" (medium) - Steps: Increase budget 20%, monitor 3 days, scale if ROAS holds
-
-### Response Schema (enforced by OpenAI)
-
-```json
-{
-  "summary": "2-3 sentence performance overview",
-  "key_metrics": { "spend", "impressions", "clicks", "ctr", "conversions", "roas" },
-  "insights": [{
-    "type": "success|warning|critical",
-    "title": "Insight title",
-    "detail": "Explanation of what GPT found",
-    "evidence": "Specific data backing this up"
-  }],
-  "actions": [{
-    "priority": "high|medium|low",
-    "title": "Action title",
-    "steps": ["Step 1", "Step 2", "Step 3"],
-    "expected_impact": "What user can expect if they do this"
-  }]
-}
+**2. Enable site:**
+```bash
+sudo ln -s /etc/nginx/sites-available/adsetric /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
 ```
 
-### Insight Types
-- `success` - Positive performance worth celebrating
-- `warning` - Needs attention but not urgent
-- `critical` - Urgent issue hurting performance
-
-### Action Priorities
-- `high` - Do this first, biggest impact on results
-- `medium` - Important but can wait a few days
-- `low` - Nice optimization, do when you have time
-
-### Config
-- Model: `gpt-4o-mini` (fast, cheap, supports structured outputs)
-- Temperature: `0.3` (consistent, factual - not creative)
-- Strict JSON schema enforced (GPT must return valid structure)
-
----
-
-## Background Job
-
-**Job:** `app/jobs/ad_account_analysis_job.rb`
-
-```ruby
-AdAccountAnalysisJob.perform_later(ad_account.id)
-```
-
-1. Fetches data from Unified.to
-2. Sends to ChatGPT for analysis
-3. Creates `ad_analysis` record
-4. Falls back to basic summary if GPT fails
-
----
-
-## Routes
-
-### Auth
-```
-GET  /auth/register
-POST /auth/register
-GET  /auth/login
-POST /auth/login
-DELETE /logout
-```
-
-### Dashboard
-```
-GET  /dashboard/overview              → Main dashboard (or onboarding)
-GET  /dashboard/analyzing             → Loading screen with polling
-GET  /dashboard/overview/analysis_status  → JSON: { complete: true/false }
-POST /dashboard/overview/trigger_analysis → Trigger re-analysis
-GET  /dashboard/analytics             → Detailed metrics
-GET  /dashboard/campaigns             → Campaign list
-```
-
-### Settings & OAuth
-```
-GET    /dashboard/settings                      → Account settings
-PATCH  /dashboard/settings                      → Update settings
-DELETE /dashboard/settings/ad_accounts/:id      → Disconnect account
-POST   /dashboard/settings/add_mock_account     → Add demo account
-
-GET  /dashboard/settings/unified/connect     → Start OAuth
-GET  /dashboard/settings/unified/callback    → Handle OAuth callback
-GET  /dashboard/settings/unified/select_org  → Organization picker
-POST /dashboard/settings/unified/save_org    → Save org + trigger job
+**3. Install SSL certificate:**
+```bash
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com
 ```
 
 ---
 
-## Database Columns Added
+## Step 12: Test Everything
 
-**ad_accounts:**
-- `unified_organization_id` - Meta ad account ID (user selects after OAuth)
+**Test Stripe Checkout:**
+1. Go to `https://yourdomain.com/pricing`
+2. Click "Get Started" on any plan
+3. Use test card: `4242 4242 4242 4242` (any future date, any CVC)
+4. Complete checkout
+5. Check Stripe dashboard to see the subscription
 
-**ad_analyses:**
-- `analysis_json` - Full GPT response stored as JSON
-- `analysis_version` - Schema version (1 = GPT, 0 = fallback)
+**Test Meta Ads Connection:**
+1. Login to your account
+2. Go to Settings or Dashboard
+3. Click "Connect Meta Account"
+4. You'll be redirected to Meta to authorize
+5. Select your Business account
+6. Grant permissions
+7. Select an ad account from the list
+8. Verify it's connected in your dashboard
+
+**Check Webhooks:**
+1. Go to https://dashboard.stripe.com/webhooks
+2. Click on your webhook
+3. Check "Recent events" - should show successful deliveries
 
 ---
 
-## Key Files
+## Troubleshooting
 
-| File | Purpose |
-|------|---------|
-| `app/services/unified_ads_service.rb` | Unified.to OAuth + data fetching |
-| `app/services/chatgpt_analysis_service.rb` | GPT-4 structured analysis |
-| `app/jobs/ad_account_analysis_job.rb` | Background analysis job |
-| `app/controllers/private/settings/account_controller.rb` | OAuth flow + account management |
-| `app/views/private/dashboard/overview/analyzing.html.erb` | Loading screen with polling |
-| `app/views/private/settings/account/unified_select_org.html.erb` | Organization picker UI |
+**Stripe checkout not working:**
+- Make sure `STRIPE_PUBLISHABLE_KEY` is set correctly
+- Check browser console for errors
+- Verify webhook URL is accessible (not behind login)
+
+**Meta Ads connection failing:**
+- Verify `UNIFIED_WORKSPACE_ID` and `UNIFIED_API_TOKEN` are correct
+- Make sure Meta integration is enabled in Unified.to dashboard
+- Check callback URL in Unified.to matches exactly: `https://yourdomain.com/connect/callback`
+- Ensure user is Admin or Advertiser on the Meta ad account
+- Check user has proper permissions in Meta Business Manager
+
+**Webhooks failing:**
+- Verify `STRIPE_WEBHOOK_SECRET` matches Stripe dashboard
+- Check logs: `tail -f log/production.log`
+- Make sure webhook endpoint is not behind authentication
+
+**App not starting:**
+- Check all environment variables are set in `.env`
+- Verify database connection
+- Check logs for errors: `journalctl -u adsetric -f`
 
 ---
 
-## Brand Colors
+## Useful Commands
 
-- Primary: `#0a61ec`
-- Dark: `#0950d1`
-- Light: `#badaff`
+**View logs:**
+```bash
+tail -f log/production.log
+journalctl -u adsetric -f
+```
+
+**Restart app:**
+```bash
+sudo systemctl restart adsetric
+```
+
+**Update app:**
+```bash
+cd /var/www/adsetric
+git pull
+bundle install
+RAILS_ENV=production rails db:migrate
+RAILS_ENV=production rails assets:precompile
+sudo systemctl restart adsetric
+```
+
+**Check app status:**
+```bash
+sudo systemctl status adsetric
+```
+
+---
+
+**You're done! Your app should be live at https://yourdomain.com** 🚀
