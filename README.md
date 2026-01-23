@@ -170,34 +170,62 @@ SECRET_KEY_BASE=<generate by running: rails secret>
 
 ---
 
-## Step 10: Deploy on VPS (Ubuntu)
+## Step 10: Deploy on VPS
 
 **1. Install dependencies:**
 ```bash
 sudo apt update
-sudo apt install -y ruby-full build-essential postgresql postgresql-contrib libpq-dev nodejs nginx
+sudo apt install -y ruby-full build-essential postgresql postgresql-contrib libpq-dev nodejs nginx git
 ```
 
-**2. Clone and setup application:**
+**2. Setup PostgreSQL:**
+```bash
+# Switch to postgres user
+sudo -u postgres psql
+
+# Create database and user
+CREATE DATABASE adsetric;
+CREATE USER adsetric WITH PASSWORD 'your_secure_password';
+GRANT ALL PRIVILEGES ON DATABASE adsetric TO adsetric;
+\q
+```
+
+**3. Clone and setup application:**
 ```bash
 cd /var/www
-git clone <your-repo-url> adsetric
+sudo git clone <your-repo-url> adsetric
 cd adsetric
-bundle install
+sudo bundle install
 ```
 
-**3. Setup database:**
+**4. Copy your .env file to the server:**
 ```bash
-sudo -u postgres createdb adsetric_production
+# On your local machine, copy .env to server
+scp .env user@yourserver:/var/www/adsetric/.env
+```
+
+**5. Run database migrations:**
+
+The app includes these database tables that will be created automatically:
+
+- **users**: User accounts (name, email, password, referral_code)
+- **subscriptions**: Stripe subscription data (plan, status, billing info)
+- **ad_accounts**: Connected Meta ad accounts (connection_id, organization_id, platform)
+- **ad_analyses**: AI-generated ad insights (summary, metrics, recommendations)
+- **referrals**: Affiliate tracking (referrer, referee, commission)
+
+Run migrations to create all tables:
+```bash
+cd /var/www/adsetric
 RAILS_ENV=production rails db:migrate
 ```
 
-**4. Precompile assets:**
+**6. Precompile assets:**
 ```bash
 RAILS_ENV=production rails assets:precompile
 ```
 
-**5. Create systemd service** (`/etc/systemd/system/adsetric.service`):
+**7. Create systemd service** (`/etc/systemd/system/adsetric.service`):
 ```ini
 [Unit]
 Description=Adsetric
@@ -216,11 +244,12 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-**6. Start service:**
+**8. Start the app:**
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable adsetric
 sudo systemctl start adsetric
+sudo systemctl status adsetric
 ```
 
 ---
